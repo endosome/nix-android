@@ -201,3 +201,29 @@ appear in that diagnostic format. No device mutation was performed.
 
 The mandatory release bar remains plan → apply → direct verification → no-op
 plan → graceful reboot → no-op plan on the AOSP bench.
+
+## Legacy (SDK < 24) fallbacks
+
+Executed read-only probes on a Samsung SM-G900F, Android 6.0.1 (SDK 23), shell uid 2000,
+2026-10-05 (distilled; raw output is local):
+
+| Modern command the engine uses | Legacy result | Fallback (`engine/legacy.sh`) |
+| --- | --- | --- |
+| `cmd deviceidle whitelist [+/-pkg]` | `/system/bin/sh: cmd: not found` (remote status 127) | `dumpsys deviceidle whitelist [+/-pkg]`: same line format (`user,pkg,uid`, `system-excidle,...`), `Added: pkg` on write |
+| `appops write-settings` | `Error: Unknown command: 'write-settings'.` plus usage | `dumpsys appops write-settings` prints `Current settings written.` |
+| `ime list -s --user N` | `Error: Unknown option: --user` plus usage; legacy `ime` takes no user | the same command without `--user`, only when the active user (`mCurrentUser`) is exactly N |
+| `ime enable\|disable\|set --user N ID` | **no** `Unknown option`: `--user` is taken as the input-method id and the command prints `Error: Unknown id: ...` with status 0 (observed on this device, state unchanged) | decided once from the `ime list` probe above; a legacy device is never sent `--user` on a write, and the write runs without it under the same active-user check |
+
+Legacy `adb shell` returns exit status 0 even when the remote command fails, so a missing
+command is recognised by its output text only. The modern command always runs first and
+unchanged; any failure without one of these signatures passes through with its status.
+`scripts/test-legacy-fallbacks.sh` (check `legacy-fallbacks`) pins the exact command
+sequences for modern devices (no probe traffic, no fallback; one read-only `ime list` probe precedes the first ime write), legacy devices, a
+non-target active user and genuine failures, with mutation checks on each signature.
+
+Gap, stated plainly: the AGENTS.md rule that mutation-class changes pass the AOSP emulator
+first was **not** met for this change. No emulator is available in the development host
+(no KVM access). The modern path is unchanged by construction and by the fake-device
+tests, but the emulator gate (`just bench-e2e`) must still be run before relying on it for
+a real modern phone. The write fallbacks were exercised on the Samsung through the
+provisioning controller (see that repository's SAMSUNG_SUPPORT.md).

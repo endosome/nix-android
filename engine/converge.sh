@@ -77,6 +77,10 @@ adb_shell() {
   done
   adb shell "$remote"
 }
+# Probe-gated fallbacks for Android < 7 (modern commands run first, unchanged).
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=legacy.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy.sh"
 # Tuple field separator. NOT a tab: `IFS=$'\t' read` treats tab as
 # whitespace-class and collapses empty interior fields (an unset `cur` would
 # shift `want` out of existence → `settings put key ''`). US (\037) is never
@@ -545,7 +549,7 @@ done < <(jq -r '.android.locales | to_entries[] | [.key, (.value | join(","))] |
 
 enabled_imes=
 if jq -e '(.android.inputMethod.enabled + .android.inputMethod.disabled) | length > 0' "$manifest" >/dev/null; then
-  enabled_imes=$(adb_shell ime list -s --user "$user" | tr -d '\r')
+  enabled_imes=$(ime_command list -s --user "$user" | tr -d '\r')
 fi
 while read -r component; do
   [ -z "$component" ] && continue
@@ -611,7 +615,7 @@ done < <(jq -r '.android.appLinks | to_entries[] | [.key, (.value.allowed | tost
 
 idle_now=
 if jq -e '(.android.deviceidleExempt + .android.deviceidleUnexempt) | length > 0' "$manifest" >/dev/null; then
-  idle_now=$(adb_shell cmd deviceidle whitelist | tr -d '\r')
+  idle_now=$(deviceidle_whitelist | tr -d '\r')
 fi
 while read -r pkg; do
   [ -z "$pkg" ] && continue
@@ -880,7 +884,7 @@ for t in "${todo_appop[@]}"; do
   IFS=$US read -r p o _ w <<<"$t"
   adb_shell appops set --user "$user" "$p" "$o" "$w"
 done
-[ "${#todo_appop[@]}" -eq 0 ] || adb_shell appops write-settings >/dev/null
+[ "${#todo_appop[@]}" -eq 0 ] || appops_write_settings >/dev/null
 for p in "${todo_suspend[@]}"; do
   adb_shell pm suspend --user "$user" "$p" >/dev/null
 done
@@ -892,14 +896,14 @@ for t in "${todo_locale[@]}"; do
   adb_shell cmd locale set-app-locales "$p" --user "$user" --locales "$w"
 done
 for c in "${todo_ime_enable[@]}"; do
-  adb_shell ime enable --user "$user" "$c" >/dev/null
+  ime_command enable --user "$user" "$c" >/dev/null
 done
 for t in "${todo_ime_default[@]}"; do
   IFS=$US read -r _ w <<<"$t"
-  adb_shell ime set --user "$user" "$w" >/dev/null
+  ime_command set --user "$user" "$w" >/dev/null
 done
 for c in "${todo_ime_disable[@]}"; do
-  adb_shell ime disable --user "$user" "$c" >/dev/null
+  ime_command disable --user "$user" "$c" >/dev/null
 done
 for t in "${todo_data_saver[@]}"; do
   IFS=$US read -r _ w <<<"$t"
@@ -923,10 +927,10 @@ for t in "${todo_link_unselected[@]}"; do
   adb_shell pm set-app-links-user-selection --user "$user" --package "$p" false "$d"
 done
 for pkg in "${todo_idle[@]}"; do
-  adb_shell cmd deviceidle whitelist "+$pkg" >/dev/null
+  deviceidle_whitelist "+$pkg" >/dev/null
 done
 for pkg in "${todo_unidle[@]}"; do
-  adb_shell cmd deviceidle whitelist "-$pkg" >/dev/null
+  deviceidle_whitelist "-$pkg" >/dev/null
 done
 for pkg in "${todo_remove[@]}"; do
   echo "uninstalling $pkg..."

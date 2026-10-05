@@ -326,6 +326,19 @@
                   bash ${inputs.self}/scripts/test-dnd.sh ${inputs.self} ${pkgs.bash}/bin/bash
                   touch $out
                 '';
+            legacy-fallbacks =
+              pkgs.runCommand "nix-android-legacy-fallbacks"
+                {
+                  nativeBuildInputs = [
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                  ];
+                }
+                ''
+                  bash ${inputs.self}/scripts/test-legacy-fallbacks.sh
+                  touch $out
+                '';
             generations =
               pkgs.runCommand "nix-android-generations"
                 {
