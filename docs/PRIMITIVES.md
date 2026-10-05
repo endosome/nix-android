@@ -137,7 +137,10 @@ because the manifest declared none of that state. Fake-client checks also
 exercise this narrow plan/apply/no-op path while unused APIs fail.
 
 This is one OEM/key read/write/idempotence data point, not full Samsung support.
-Graceful-reboot persistence on that phone remains untested. No new public module
+After the user reported restarting the phone, independent direct readback and
+downstream verification again confirmed 60000 and a read-only no-op plan. The
+restart was user-performed; no controlled boot-ID transition or reboot method
+was recorded. No new public module
 option is exposed, and modern package, role, locale and import prerequisites
 remain unchanged. Raw device state is not committed here.
 
