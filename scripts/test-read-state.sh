@@ -42,6 +42,11 @@ grep -Fq 'INTERNET' <<<"$scoped" \
   && fail "user block leaked the install-permissions section"
 permission_user_block 3 <<<"$multi_user_dump" >/dev/null 2>&1 \
   && fail "user block reported a missing user as found"
+legacy_permissions=$'Packages:\n  Package [org.example.app] (abc):\n    User 0: installed=true\n      runtime permissions:\n        android.permission.CAMERA, granted=true, flags=0x20\nShared users:\n  SharedUser [unrelated] (def):\n    User 0:\n      runtime permissions:\n        android.permission.CAMERA, granted=false, flags=0x00'
+scoped=$(permission_user_block 0 org.example.app <<<"$legacy_permissions")
+grep -Fq 'android.permission.CAMERA: granted=true, flags=[0x20]' <<<"$scoped" || fail 'legacy runtime syntax not normalized'
+grep -Fq 'granted=false' <<<"$scoped" && fail 'unrelated shared UID leaked'
+permission_user_block 0 org.example.other <<<"$legacy_permissions" >/dev/null 2>&1 && fail 'wrong package selected'
 
 # A suspended package: AOSP Settings.dumpPackageLPr prints "    Suspend params:"
 # at the User header's own indent, plus a blank line per suspender, BEFORE the

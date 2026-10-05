@@ -74,15 +74,37 @@ dnd_command_argument() {
 # app's runtime permissions live in the later "Shared users:" section's
 # "    User N: " block. Callers take the first match.
 permission_user_block() {
-  local wanted_user=$1
-  gawk -v wanted_user="$wanted_user" '
+  local wanted_user=$1 wanted_package=${2:-}
+  gawk -v wanted_user="$wanted_user" -v wanted_package="$wanted_package" '
     BEGIN { header = "    User " wanted_user ":" }
+    # With a package name, only that package'"'"'s entry is read. The later
+    # "Shared users:" section is read too, but only when the entry names a
+    # sharedUser=, so an unrelated shared UID'"'"'s User block never leaks in.
+    wanted_package!="" && /^[[:space:]]*Package \[/ {
+      name=$0; sub(/^.*Package \[/,"",name); sub(/\].*$/,"",name)
+      in_package=(name==wanted_package)
+      match($0,/[^[:space:]]/); package_indent=RSTART-1
+      if (!in_package) { active = 0; next }
+    }
+    wanted_package!="" && in_package && /[^[:space:]]/ {
+      match($0,/[^[:space:]]/)
+      if (RSTART-1<=package_indent && $0 !~ /^[[:space:]]*Package \[/) in_package=0
+      else if ($0 ~ /^[[:space:]]*sharedUser=/) shared=1
+    }
+    wanted_package!="" && !in_package && !shared && /[^[:space:]]/ { active = 0; next }
     /^    User [0-9]+:/ {
       active = index($0, header) == 1
       if (active) found = 1
     }
     /^ {0,3}[^ ]/ { active = 0 }
-    active { print }
+    active {
+      # Legacy dumps print "perm, granted=true, flags=0x..." in place of the
+      # modern "perm: granted=true, flags=[ ... ]".
+      sub(/, granted=/, ": granted=")
+      sub(/flags=0x([0-9a-fA-F]+)/, "flags=[&]")
+      sub(/\[flags=/, "[")
+      print
+    }
     END { if (!found) exit 1 }
   '
 }

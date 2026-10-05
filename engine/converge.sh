@@ -410,7 +410,7 @@ load_permission_package() {
     if [ -n "$(current_code "$pkg")" ]; then
       permission_present[$pkg]=1
       full_dump=$(adb_shell dumpsys package "$pkg" | tr -d '\r')
-      if ! scoped_dump=$(permission_user_block "$user" <<<"$full_dump"); then
+      if ! scoped_dump=$(permission_user_block "$user" "$pkg" <<<"$full_dump"); then
         echo "cannot locate User $user permission state for installed package $pkg" >&2
         exit 2
       fi
@@ -827,7 +827,7 @@ for t in "${todo_grant[@]}"; do
     # another user's state.
     post_dump=$(adb_shell dumpsys package "$p" | tr -d '\r')
     user_found=1
-    post_user=$(permission_user_block "$user" <<<"$post_dump") || { post_user=; user_found=0; }
+    post_user=$(permission_user_block "$user" "$p" <<<"$post_dump") || { post_user=; user_found=0; }
     post_install=$(install_permission_block <<<"$post_dump")
     post_state="$post_user"$'\n'"$post_install"
     grep -Fq "  $m: granted=true" <<<"$post_state" && continue
