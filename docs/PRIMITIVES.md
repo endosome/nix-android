@@ -122,6 +122,25 @@ Rules derived from the test:
 2. use graceful user-requested reboot for persistence tests;
 3. require a post-reboot no-op plan before calling a primitive persistent.
 
+## Preliminary Samsung settings-only evidence
+
+On 2026-10-05, a downstream provisioning controller used this local fork with
+an explicit Windows ADB wrapper from WSL against a disposable Samsung SM-G900F,
+Android 6.0.1 / SDK 23 / armeabi-v7a. A Nix manifest declaring only owner-user
+`system/screen_off_timeout = 60000` planned the observed change from 30000,
+applied it once through the existing `settings put --user 0` primitive, and
+matched independent namespace-list and direct-get readback at 60000.
+
+The second apply made no writes; the downstream transport blocked every write
+during that run. The engine's optional package/IME/DeviceIdle reads were skipped
+because the manifest declared none of that state. Fake-client checks also
+exercise this narrow plan/apply/no-op path while unused APIs fail.
+
+This is one OEM/key read/write/idempotence data point, not full Samsung support.
+Graceful-reboot persistence on that phone remains untested. No new public module
+option is exposed, and modern package, role, locale and import prerequisites
+remain unchanged. Raw device state is not committed here.
+
 ## Stock Android read-side
 
 A separate stock Android 16 Pixel accepted the same explicit-serial import and
