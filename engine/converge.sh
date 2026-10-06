@@ -502,7 +502,7 @@ done < <(jq -r '.android.permissions | to_entries[] | .key as $p | .value.flags 
 while IFS=$US read -r pkg op want; do
   if [ -n "$(current_code "$pkg")" ]; then
     appop_output=$(adb_shell appops get --user "$user" "$pkg" "$op" | tr -d '\r')
-    cur=$(appop_mode_from_output "$op" <<<"$appop_output") \
+    cur=$(appop_current_for_want "$op" "$want" <<<"$appop_output") \
       || { echo "unable to read app-op $pkg $op" >&2; exit 1; }
   else
     cur=absent

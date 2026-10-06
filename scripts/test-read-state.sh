@@ -176,6 +176,25 @@ appop_mode_from_output RUN_IN_BACKGROUND </dev/null >/dev/null 2>&1 \
 appop_mode_from_output RUN_IN_BACKGROUND <<<'unexpected format' >/dev/null 2>&1 \
   && fail "unrecognized app-op output did not fail"
 
+# --- appop_current_for_want: absent override equal to the device default is converged ----
+# Real output captured from the AOSP emulator (Android 15, SDK 35) on 2026-10-06 for
+# `appops get --user 0 com.android.shell VIBRATE`; SDK 23 prints only `No operations.`.
+modern_default=$'No operations.\nDefault mode: allow'
+[ "$(appop_current_for_want VIBRATE allow <<<"$modern_default")" = allow ] \
+  || fail "absent override equal to the default was not treated as converged"
+[ "$(appop_current_for_want VIBRATE deny <<<"$modern_default")" = default ] \
+  || fail "absent override with a different default was misreported as converged"
+[ "$(appop_current_for_want VIBRATE default <<<"$modern_default")" = default ] \
+  || fail "declared default with no override was misread"
+[ "$(appop_current_for_want VIBRATE allow <<<'No operations.')" = default ] \
+  || fail "legacy output without a default line must stay default"
+[ "$(appop_current_for_want VIBRATE allow <<<$'VIBRATE: deny; time=+1s ago\nDefault mode: allow')" = deny ] \
+  || fail "an explicit override must win over the default line"
+[ "$(appop_current_for_want VIBRATE foreground <<<$'No operations.\nDefault mode: foreground')" = foreground ] \
+  || fail "foreground default not honoured"
+appop_current_for_want VIBRATE allow <<<'unexpected format' >/dev/null 2>&1 \
+  && fail "unrecognized output must still fail"
+
 # --- writable_flags_csv: writable subset only, codepoint-sorted --------------
 [ "$(writable_flags_csv 'USER_SET|USER_FIXED|USER_SENSITIVE_WHEN_GRANTED')" = 'user-fixed,user-set' ] \
   || fail "writable flag extraction/order wrong"

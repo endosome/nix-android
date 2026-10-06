@@ -227,3 +227,13 @@ first was **not** met for this change. No emulator is available in the developme
 tests, but the emulator gate (`just bench-e2e`) must still be run before relying on it for
 a real modern phone. The write fallbacks were exercised on the Samsung through the
 provisioning controller (see that repository's SAMSUNG_SUPPORT.md).
+
+## App-op defaults (read-only evidence)
+
+`appops get --user 0 PACKAGE OP` on the AOSP emulator (Android 15, SDK 35, 2026-10-06) prints, for a package with no override,
+`No operations.` followed by `Default mode: allow` (VIBRATE, `com.android.shell`); Android 6 (SDK 23) prints only `No operations.`.
+An absent override whose device default already equals the declared mode is therefore converged, and the engine no longer
+re-plans a write for it (`appop_current_for_want` in `engine/read-state.sh`, golden fixtures in `scripts/test-read-state.sh`).
+Explicit overrides still win, a different default still plans the write, and legacy output is unchanged. This is a read
+comparison only: no new device command is issued, so no mutation primitive changes. The emulator write round trip for
+default-equal declarations was not run.

@@ -181,6 +181,24 @@ appop_mode_from_output() {
   printf '%s\n' "$mode"
 }
 
+# The mode to compare with a declared mode. Without an override Android prints
+# `No operations.` and, on modern devices, `Default mode: X`; an absent override
+# whose default already equals the declared mode is converged, so it must not be
+# re-planned forever. Android < 7 prints no default line and is unchanged.
+# Usage: appop_current_for_want OP WANT < output
+appop_current_for_want() {
+  local op=$1 want=$2 appop_output mode default_mode
+  appop_output=$(cat)
+  mode=$(appop_mode_from_output "$op" <<<"$appop_output") || return 1
+  if [ "$mode" = default ]; then
+    default_mode=$(sed -n 's/^Default mode: \(allow\|ignore\|deny\|foreground\)$/\1/p' <<<"$appop_output" | head -n1)
+    if [ -n "$default_mode" ] && [ "$default_mode" = "$want" ]; then
+      mode=$want
+    fi
+  fi
+  printf '%s\n' "$mode"
+}
+
 # User-selected app-link domains from `pm get-app-links --user N <pkg>` output.
 app_link_selected_domains() {
   awk '
