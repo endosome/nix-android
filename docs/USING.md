@@ -275,7 +275,16 @@ component form at build time, because `ime list -s` reports only the short
 form and an unnormalized spelling could never converge. Because
 `android.inputMethod` owns the same Android state as the raw
 `default_input_method`/`enabled_input_methods` secure keys, declaring both is
-rejected at evaluation. `doNotDisturb.mode` manages only the global Do Not Disturb
+rejected at evaluation. `inputMethod.subtypes` enables keyboard layouts of one
+input method by the locale its subtypes report (`mSubtypeLocale` in `dumpsys input_method`,
+e.g. `en_US`, `pl`): each is resolved to the device's own subtype hash code at plan time,
+and a locale the keyboard does not offer, or offers more than once, fails the plan. The
+missing hashes are appended, in the declared order, to that component's entry in
+`enabled_input_methods`; other entries, layouts already enabled and the selected layout
+are never changed or removed. A keyboard whose layouts are still implicit (no hashes in
+its entry, Android choosing from the system language) gets exactly the declared list, so
+declare the current layout too. The written value is read back. Keyboards that keep their
+languages in their own app storage (the Samsung keyboard) are out of reach. `doNotDisturb.mode` manages only the global Do Not Disturb
 mode (`off`, `priority`, `alarms`, or `total` for total silence); it is set with
 `cmd notification set_dnd` because Android silently ignores a shell write to the
 `zen_mode` setting, so `android.settings.global.zen_mode` cannot do it. A device without

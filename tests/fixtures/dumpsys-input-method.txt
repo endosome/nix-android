@@ -1,0 +1,15 @@
+  Input Methods: (trimmed from a GrapheneOS Android 17 Pixel 8a, 2026-10-10)
+      InputMethod #0:
+        mId=com.android.inputmethod.latin/.LatinIME mSettingsActivityName=com.android.inputmethod.latin.settings.Setting
+        InputMethodSubtype array: count=5
+            mSubtypeNameOverride= mSubtypeShortLabel= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=-921088104 mSubtypeLocale=en_US mSubtypeLanguageTag=en-US mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=true mSubtypeHashCode=-921088104
+            mSubtypeNameOverride= mSubtypeShortLabel= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=-1337596075 mSubtypeLocale=en_GB mSubtypeLanguageTag=en-GB mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=true mSubtypeHashCode=-1337596075
+            mSubtypeNameOverride= mSubtypeShortLabel= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=195674344 mSubtypeLocale=bg mSubtypeLanguageTag= mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=false mSubtypeHashCode=195674344
+            mSubtypeNameOverride= mSubtypeShortLabel= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=1599191706 mSubtypeLocale=bg mSubtypeLanguageTag= mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=false mSubtypeHashCode=1599191706
+            mSubtypeNameOverride= mSubtypeShortLabel= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=1124698716 mSubtypeLocale=pl mSubtypeLanguageTag= mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=true mSubtypeHashCode=1124698716
+      InputMethod #1:
+        mId=org.example.voice/.VoiceIme mSettingsActivityName=null
+        InputMethodSubtype array: count=1
+            mSubtypeNameOverride= mSubtypeId=777 mSubtypeLocale=pl mSubtypeLanguageTag=pl mSubtypeMode=voice mIsAuxiliary=true mSubtypeHashCode=777
+      mEnabledItems:
+          i=0 item=ImeSubtypeListItem{mImeName=Keyboard mSubtypeName=English (US) mSubtypeIndex=0}

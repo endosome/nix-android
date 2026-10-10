@@ -27,7 +27,8 @@
       inputMethodComponents =
         cfg.android.inputMethod.enabled
         ++ cfg.android.inputMethod.disabled
-        ++ lib.optional (cfg.android.inputMethod.default != null) cfg.android.inputMethod.default;
+        ++ lib.optional (cfg.android.inputMethod.default != null) cfg.android.inputMethod.default
+        ++ builtins.attrNames cfg.android.inputMethod.subtypes;
       # Android reports IME ids as ComponentName.flattenToShortString(); a
       # fully-qualified spelling of the same component would never match the
       # device and could never converge, so normalize at manifest build time.
@@ -47,6 +48,9 @@
             null
           else
             canonicalComponent cfg.android.inputMethod.default;
+        subtypes = lib.mapAttrs' (
+          component: locales: lib.nameValuePair (canonicalComponent component) locales
+        ) cfg.android.inputMethod.subtypes;
       };
       inputMethodPackages = map (
         component: lib.head (lib.splitString "/" component)
@@ -152,6 +156,14 @@
         ++ map (value: "deviceidle-unexempt:${value}") (duplicates cfg.android.batteryOptimization.unexempt)
         ++ map (value: "ime-enabled:${value}") (duplicates inputMethodFinal.enabled)
         ++ map (value: "ime-disabled:${value}") (duplicates inputMethodFinal.disabled)
+        ++ map (value: "ime-subtypes-component:${value}") (
+          duplicates (map canonicalComponent (builtins.attrNames cfg.android.inputMethod.subtypes))
+        )
+        ++ lib.concatLists (
+          lib.mapAttrsToList (
+            component: locales: map (locale: "ime-subtype:${component}:${locale}") (duplicates locales)
+          ) cfg.android.inputMethod.subtypes
+        )
         ++ lib.concatLists (
           lib.mapAttrsToList (
             package: locales: map (locale: "locale:${package}:${locale}") (duplicates locales)
@@ -491,7 +503,7 @@
         assert validated;
         pkgs.writeText "nix-android-${cfg.device.name}-manifest-base.json" (
           builtins.toJSON {
-            manifestVersion = 6;
+            manifestVersion = 7;
             device = {
               inherit (cfg.device) name user abi;
             };

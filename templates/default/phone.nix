@@ -126,6 +126,8 @@
     # inputMethod = {
     #   enabled = [ "helium314.keyboard/.latin.LatinIME" ];
     #   default = "helium314.keyboard/.latin.LatinIME";
+    #   # Keyboard layouts, by the locale the keyboard reports; appended in this order:
+    #   # subtypes."com.android.inputmethod.latin/.LatinIME" = [ "en_US" "pl" ];
     # };
 
     # dataSaver.enabled = true; # global Data Saver; null = unmanaged

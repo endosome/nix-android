@@ -51,7 +51,9 @@ jq '
     deviceidleUnexempt: []
   } |
   # Version-6 manifests carry doNotDisturb; older ones must not gain the key.
-  if .manifestVersion >= 6 then .android.doNotDisturb = {mode: null} else . end
+  if .manifestVersion >= 6 then .android.doNotDisturb = {mode: null} else . end |
+  # Version-7 manifests carry inputMethod.subtypes; older ones must not gain the key.
+  if .manifestVersion >= 7 then .android.inputMethod.subtypes = {} else . end
 ' "$manifest" > "$phase"
 
 echo "== phase 1/3: reproducible APKs =="

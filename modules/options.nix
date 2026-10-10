@@ -281,6 +281,30 @@ in
           default = null;
           description = "Selected input-method service component (`ime set`). null = unmanaged; a selected component must also appear in enabled.";
         };
+        subtypes = lib.mkOption {
+          type = with lib.types; attrsOf (listOf str);
+          default = { };
+          example = {
+            "com.android.inputmethod.latin/.LatinIME" = [
+              "en_US"
+              "pl"
+            ];
+          };
+          description = ''
+            Keyboard layouts (input-method subtypes) to ensure enabled, per input-method component, by
+            the subtype locale the keyboard itself reports (`mSubtypeLocale` in `dumpsys input_method`,
+            e.g. `en_US`, `pl`). Each locale is resolved to the device's own subtype hash code at plan
+            time (codes differ by build, so they are never declared); a locale the keyboard does not
+            offer, or offers more than once, fails the plan. Missing layouts are appended, in the given
+            order, to that component's entry in `Settings.Secure.enabled_input_methods`; every other
+            entry, every layout already enabled and the selected layout are left alone, and nothing is
+            ever removed. A component whose layouts are still implicit (chosen by Android from the
+            system language) gets exactly the declared list, so name every layout you want, the
+            current one included. The component must be enabled (on the device, or through
+            `enabled`). Keyboards that keep their languages in their own app storage (e.g. the
+            Samsung keyboard) cannot be managed this way.
+          '';
+        };
       };
 
       dataSaver = {

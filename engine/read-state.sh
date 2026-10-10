@@ -63,6 +63,88 @@ dnd_command_argument() {
   esac
 }
 
+# Keyboard layouts (input-method subtypes). `dumpsys input_method` lists each input method
+# (`mId=COMPONENT`) followed by its subtypes, one line each with mSubtypeLocale, mSubtypeMode and
+# mSubtypeHashCode (AOSP Android 15 bench and GrapheneOS Android 17, 2026-10-10). Hash codes differ
+# by build, so they are always read from the device, never declared.
+# stdin: `dumpsys input_method`; stdout: `COMPONENT LOCALE HASH` per keyboard-mode subtype.
+ime_subtype_table() {
+  tr -d '\r' | awk '
+    function field(name,   rest) {
+      if (!match($0, name "[^ ]*")) return ""
+      rest = substr($0, RSTART + length(name), RLENGTH - length(name))
+      return rest
+    }
+    /^[[:space:]]*mId=/ { component = field("mId=") }
+    /mSubtypeLocale=/ && /mSubtypeHashCode=/ {
+      if (field("mSubtypeMode=") != "keyboard") next
+      locale = field("mSubtypeLocale="); hash = field("mSubtypeHashCode=")
+      if (component != "" && locale ~ /^[A-Za-z0-9_]+$/ && hash ~ /^-?[0-9]+$/) print component, locale, hash
+    }'
+}
+# The one hash of COMPONENT's layout LOCALE. stdin: ime_subtype_table output.
+# Exit 1 when the input method offers no such layout, 2 when it offers several (the declaration
+# cannot say which one; refusing beats guessing).
+ime_subtype_hash() {
+  local component=$1 locale=$2 found
+  found=$(awk -v c="$component" -v l="$locale" '$1 == c && $2 == l { print $3 }' | sort -u)
+  [ -n "$found" ] || return 1
+  [ "$(wc -l <<<"$found")" -eq 1 ] || return 2
+  printf '%s\n' "$found"
+}
+# A component in the short form Android uses for `ime list -s`: pkg/pkg.Cls -> pkg/.Cls.
+ime_short_component() {
+  local package=${1%%/*} class=${1#*/}
+  case $class in "$package".*) class=.${class#"$package".} ;; esac
+  printf '%s/%s\n' "$package" "$class"
+}
+# The layout hashes COMPONENT's entry lists explicitly, one per line (none when the entry has no
+# hashes or there is no entry). stdin: the setting's value.
+ime_enabled_subtypes() {
+  local component=$1 entry head
+  local -a parts
+  { tr -d '\r\n'; echo; } | tr ':' '\n' | while IFS= read -r entry; do
+    IFS=';' read -r -a parts <<<"$entry"
+    head=${parts[0]:-}
+    [ -n "$head" ] && [ "$(ime_short_component "$head")" = "$component" ] || continue
+    for hash in "${parts[@]:1}"; do printf '%s\n' "$hash"; done
+  done
+}
+# Settings.Secure.enabled_input_methods is `COMPONENT[;HASH...]` entries joined by `:`; an entry
+# without hashes means Android picks its layouts implicitly (from the system language).
+# stdin: the setting's current value (`null` or empty = no entries); args: COMPONENT HASH...
+# stdout: the value with each missing HASH appended, in the given order, to COMPONENT's entry. Every
+# other entry, every existing hash and their order are kept. Exit 3 when COMPONENT has no entry (it is
+# not enabled), 4 when the value is not in the expected form (never rewrite what cannot be parsed).
+ime_subtypes_merged() {
+  local component=$1 value entry head part found=0 out='' merged have
+  local -a entries parts
+  shift
+  value=$(tr -d '\r\n')
+  [ "$value" = null ] && value=
+  [ -z "$value" ] || [[ $value =~ ^[A-Za-z0-9_.$/:\;-]+$ ]] || return 4
+  IFS=: read -r -a entries <<<"$value"
+  for entry in "${entries[@]}"; do
+    [ -n "$entry" ] || return 4
+    IFS=';' read -r -a parts <<<"$entry"
+    head=${parts[0]}
+    [[ $head =~ ^[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+$ ]] || return 4
+    for part in "${parts[@]:1}"; do [[ $part =~ ^-?[0-9]+$ ]] || return 4; done
+    merged=$entry
+    if [ "$(ime_short_component "$head")" = "$component" ]; then
+      found=1
+      have=';'
+      for part in "${parts[@]:1}"; do have+="$part;"; done
+      for part in "$@"; do
+        [[ $have == *";$part;"* ]] || { merged+=";$part"; have+="$part;"; }
+      done
+    fi
+    out+=${out:+:}$merged
+  done
+  [ "$found" -eq 1 ] || return 3
+  printf '%s\n' "$out"
+}
+
 # Print only the "User <N>:" block of a `dumpsys package <pkg>` dump.
 # Fails when the block is missing so callers fail loudly instead of reading
 # another profile's state. A block ends only at the next "    User N:" header

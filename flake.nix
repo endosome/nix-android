@@ -339,6 +339,22 @@
                   bash ${inputs.self}/scripts/test-legacy-fallbacks.sh
                   touch $out
                 '';
+            ime-subtypes =
+              pkgs.runCommand "nix-android-ime-subtypes"
+                {
+                  nativeBuildInputs = [
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gawk
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.jq
+                  ];
+                }
+                ''
+                  bash ${inputs.self}/scripts/test-ime-subtypes.sh ${inputs.self} ${pkgs.bash}/bin/bash
+                  touch $out
+                '';
             generations =
               pkgs.runCommand "nix-android-generations"
                 {
@@ -544,14 +560,14 @@
                   grep -q 'invalid or unsupported manifest' error
 
                   jq -n '{
-                    manifestVersion: 6,
+                    manifestVersion: 7,
                     device: {name: "test", user: 0, abi: "x86_64"},
                     apps: {cleanup: "none", attended: [], play: [], managed: [], reown: false},
                     android: {
                       darkMode: null, disabled: [], deviceidleExempt: [], deviceidleUnexempt: [], roles: {},
                       settings: {global: {}, secure: {}, system: {}},
                       permissions: {}, appOps: {}, suspended: [], unsuspended: [],
-                      locales: {}, inputMethod: {enabled: [], disabled: [], default: null},
+                      locales: {}, inputMethod: {enabled: [], disabled: [], default: null, subtypes: {}},
                       dataSaver: {enabled: null}, appLinks: {},
                       doNotDisturb: {mode: null}
                     }
@@ -577,14 +593,33 @@
                   reject dnd-extra-key '.android.doNotDisturb.future = true'
                   reject dnd-missing 'del(.android.doNotDisturb)'
                   reject dnd-in-v5-manifest '.manifestVersion = 5'
-                  jq 'del(.android.doNotDisturb) | .manifestVersion = 5' valid.json > valid5.json
+                  jq 'del(.android.doNotDisturb) | del(.android.inputMethod.subtypes) | .manifestVersion = 5' valid.json > valid5.json
                   ${pkgs.bash}/bin/bash ${inputs.self}/engine/converge.sh valid5.json --validate-only
+                  # A version-6 manifest has no subtypes key and must still validate; version 7 requires it.
+                  jq 'del(.android.inputMethod.subtypes) | .manifestVersion = 6' valid.json > valid6-nosub.json
+                  ${pkgs.bash}/bin/bash ${inputs.self}/engine/converge.sh valid6-nosub.json --validate-only
+                  # A version-7 manifest (with inputMethod.subtypes) must validate; then its rejections.
+                  jq '.android.inputMethod.subtypes = {"org.example.ime/.Keyboard": ["en_US", "pl"]}' valid.json > valid7.json
+                  ${pkgs.bash}/bin/bash ${inputs.self}/engine/converge.sh valid7.json --validate-only
+                  reject7() {
+                    jq "$2" valid7.json > "$1.json"
+                    ! PATH="$PWD/fakebin:$PATH" ${pkgs.bash}/bin/bash ${inputs.self}/engine/converge.sh \
+                      "$1.json" --serial never-contact-this >/dev/null 2>error
+                    grep -q 'invalid or unsupported manifest' error
+                    test ! -e contacted
+                  }
+                  reject7 subtypes-missing 'del(.android.inputMethod.subtypes)'
+                  reject7 subtypes-in-v6-manifest '.manifestVersion = 6'
+                  reject7 subtypes-empty-list '.android.inputMethod.subtypes = {"org.example.ime/.Keyboard": []}'
+                  reject7 subtypes-duplicate '.android.inputMethod.subtypes = {"org.example.ime/.Keyboard": ["pl", "pl"]}'
+                  reject7 subtypes-bad-locale '.android.inputMethod.subtypes = {"org.example.ime/.Keyboard": ["pl;reboot"]}'
+                  reject7 subtypes-bad-component '.android.inputMethod.subtypes = {"not a component": ["pl"]}'
                   reject unknown-root '.future = {}'
                   reject unknown-app-source '.apps.privateSource = ["org.example.app"]'
                   reject unknown-android-state '.android.future = {}'
                   reject unknown-managed-field '.apps.managed = [
                     {package:"org.example.app",versionCode:1,apk:"/one.apk",future:true}]'
-                  reject v4-installer '.manifestVersion = 4 | del(.android.doNotDisturb) | del(.apps.reown) | .apps.managed = [
+                  reject v4-installer '.manifestVersion = 4 | del(.android.doNotDisturb) | del(.android.inputMethod.subtypes) | del(.apps.reown) | .apps.managed = [
                     {package:"org.example.app",versionCode:1,apk:"/one.apk",installer:null}]'
                   reject v6-missing-reown 'del(.apps.reown)'
                   reject v6-bad-installer '.apps.managed = [

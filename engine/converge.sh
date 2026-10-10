@@ -297,7 +297,8 @@ done < <(jq -r '
     (.android.locales | keys[]),
     (.android.appLinks | keys[]),
     ((.android.inputMethod.enabled + .android.inputMethod.disabled
-      + (if .android.inputMethod.default == null then [] else [.android.inputMethod.default] end))[]
+      + (if .android.inputMethod.default == null then [] else [.android.inputMethod.default] end)
+      + ((.android.inputMethod.subtypes // {}) | keys))[]
       | split("/")[0])
   ] | unique[]
 ' "$manifest")
@@ -339,6 +340,7 @@ todo_locale=()    # pkg US current-csv US wanted-csv
 todo_ime_enable=()  # component
 todo_ime_disable=() # component
 todo_ime_default=() # current US wanted
+todo_ime_subtypes=() # component US hashes (space separated, declared order) US added locales (comma separated)
 todo_data_saver=()  # current US wanted
 todo_dnd=()         # current US wanted (off|priority|alarms|total)
 todo_link_allowed=()    # pkg US current US wanted
@@ -566,6 +568,42 @@ if [ "$want_ime" != null ]; then
   [ "$cur_ime" = "$want_ime" ] || todo_ime_default+=("${cur_ime}${US}${want_ime}")
 fi
 
+# Keyboard layouts: resolve each declared locale to this build's subtype hash, then see which are
+# missing from the component's entry in enabled_input_methods (read-state.sh: ime_subtypes_merged).
+if jq -e '(.android.inputMethod.subtypes // {}) | length > 0' "$manifest" >/dev/null; then
+  ime_subtype_rows=$(adb_shell dumpsys input_method | ime_subtype_table)
+  cur_enabled_imes=$(adb_shell settings get --user "$user" secure enabled_input_methods | tr -d '\r')
+  while IFS=$US read -r component locales; do
+    hashes=() added=()
+    IFS=, read -r -a wanted_locales <<<"$locales"
+    for locale in "${wanted_locales[@]}"; do
+      rc=0
+      hash=$(ime_subtype_hash "$component" "$locale" <<<"$ime_subtype_rows") || rc=$?
+      case $rc in
+      0) hashes+=("$hash") ;;
+      2) echo "keyboard layout $locale of $component is offered more than once; cannot tell which to enable" >&2; exit 1 ;;
+      *) echo "keyboard layout $locale is not offered by $component (see mSubtypeLocale in dumpsys input_method)" >&2; exit 1 ;;
+      esac
+    done
+    rc=0
+    merged=$(ime_subtypes_merged "$component" "${hashes[@]}" <<<"$cur_enabled_imes") || rc=$?
+    if [ "$rc" -eq 3 ] && jq -e --arg c "$component" '.android.inputMethod.enabled | index($c) != null' "$manifest" >/dev/null; then
+      # Enabled by this same apply; the entry is computed again from a fresh read after `ime enable`.
+      added=("${wanted_locales[@]}")
+    elif [ "$rc" -eq 3 ]; then
+      echo "keyboard layouts declared for $component, which is neither enabled on the device nor in android.inputMethod.enabled" >&2; exit 1
+    elif [ "$rc" -ne 0 ]; then
+      echo "unable to read enabled_input_methods (unexpected value); refusing to change keyboard layouts" >&2; exit 1
+    elif [ "$merged" != "$cur_enabled_imes" ]; then
+      have=$(ime_enabled_subtypes "$component" <<<"$cur_enabled_imes")
+      for i in "${!hashes[@]}"; do
+        grep -Fqx -- "${hashes[$i]}" <<<"$have" || added+=("${wanted_locales[$i]}")
+      done
+    fi
+    [ "${#added[@]}" -eq 0 ] || todo_ime_subtypes+=("${component}${US}${hashes[*]}${US}$(IFS=,; echo "${added[*]}")")
+  done < <(jq -r '(.android.inputMethod.subtypes // {}) | to_entries[] | [.key, (.value | join(","))] | join("\u001f")' "$manifest")
+fi
+
 want_data_saver=$(jq -r '.android.dataSaver.enabled' "$manifest")
 if [ "$want_data_saver" != null ]; then
   data_saver_output=$(adb_shell cmd netpolicy get restrict-background | tr -d '\r')
@@ -638,7 +676,7 @@ done < <(jq -r '.android.deviceidleUnexempt // [] | .[]' "$manifest")
 todo_arrays=(
   todo_install todo_upgrade todo_reown todo_remove todo_setting todo_dark todo_role
   todo_disable todo_grant todo_revoke todo_permflag todo_appop todo_suspend
-  todo_unsuspend todo_locale todo_ime_enable todo_ime_disable todo_ime_default
+  todo_unsuspend todo_locale todo_ime_enable todo_ime_disable todo_ime_default todo_ime_subtypes
   todo_data_saver todo_dnd todo_link_allowed todo_link_selected todo_link_unselected
   todo_idle todo_unidle
 )
@@ -743,6 +781,7 @@ done
 for c in "${todo_ime_enable[@]}"; do echo "ime-on   $c"; done
 for c in "${todo_ime_disable[@]}"; do echo "ime-off  $c"; done
 for t in "${todo_ime_default[@]}"; do IFS=$US read -r c w <<<"$t"; echo "ime      default (${c:-none} → $w)"; done
+for t in "${todo_ime_subtypes[@]}"; do IFS=$US read -r c _ a <<<"$t"; echo "ime-sub  $c +${a//,/ +}"; done
 for t in "${todo_data_saver[@]}"; do IFS=$US read -r c w <<<"$t"; echo "datasaver ($c → $w)"; done
 for t in "${todo_dnd[@]}"; do IFS=$US read -r c w <<<"$t"; echo "dnd      ($c → $w)"; done
 for t in "${todo_link_allowed[@]}"; do IFS=$US read -r p c w <<<"$t"; echo "link-ok  $p ($c → $w)"; done
@@ -897,6 +936,19 @@ for t in "${todo_locale[@]}"; do
 done
 for c in "${todo_ime_enable[@]}"; do
   ime_command enable --user "$user" "$c" >/dev/null
+done
+for t in "${todo_ime_subtypes[@]}"; do
+  IFS=$US read -r c h _ <<<"$t"
+  read -r -a hashes <<<"$h"
+  # A fresh read: `ime enable` above may have added the entry, and the value is rewritten whole.
+  cur=$(adb_shell settings get --user "$user" secure enabled_input_methods | tr -d '\r')
+  new=$(ime_subtypes_merged "$c" "${hashes[@]}" <<<"$cur") \
+    || { echo "unable to add keyboard layouts to $c: enabled_input_methods is '$cur'" >&2; exit 1; }
+  if [ "$new" != "$cur" ]; then
+    adb_shell settings put --user "$user" secure enabled_input_methods "$new"
+    back=$(adb_shell settings get --user "$user" secure enabled_input_methods | tr -d '\r')
+    [ "$back" = "$new" ] || { echo "keyboard layouts of $c did not stick: wrote '$new', read '$back'" >&2; exit 1; }
+  fi
 done
 for t in "${todo_ime_default[@]}"; do
   IFS=$US read -r _ w <<<"$t"

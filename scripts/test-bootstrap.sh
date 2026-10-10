@@ -88,6 +88,13 @@ jq '.manifestVersion = 6 | .apps.reown = false | .android.doNotDisturb = {mode: 
 jq -e '.android.doNotDisturb == {mode: null}' "$tmp/captures/engine-2.json" >/dev/null
 jq -e '.android.doNotDisturb == {mode: "priority"}' "$tmp/captures/engine-3.json" >/dev/null
 
+# A version-7 manifest carries inputMethod.subtypes; phase one empties them like every other android field.
+rm -f "$TEST_COUNT" "$tmp/captures"/*
+jq '.manifestVersion = 7 | .apps.reown = false | .android.doNotDisturb = {mode: null} | .android.inputMethod.subtypes = {"org.example.ime/.Keyboard": ["en_US", "pl"]}' "$tmp/manifest.json" > "$tmp/manifest-v7.json"
+"$bash_bin" "$bootstrap" "$tmp/manifest-v7.json" --serial fixture >/dev/null
+jq -e '.android.inputMethod.subtypes == {}' "$tmp/captures/engine-2.json" >/dev/null
+jq -e '.android.inputMethod.subtypes == {"org.example.ime/.Keyboard": ["en_US", "pl"]}' "$tmp/captures/engine-3.json" >/dev/null
+
 rm -f "$TEST_COUNT" "$tmp/captures"/*
 export TEST_ASSIST_FAIL=1
 if "$bash_bin" "$bootstrap" "$tmp/manifest.json" --serial fixture >/dev/null 2>&1; then
